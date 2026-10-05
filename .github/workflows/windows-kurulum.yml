@@ -11,20 +11,28 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      # Windows 7 icin Python 3.8 (son destekleyen surum), 32 bit: 32 ve 64 bit Windows'ta calisir
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.8"
+          architecture: x86
       - name: Testler
         run: |
           python -m pip install -r requirements.txt
           python -m unittest discover tests
       - name: Programi paketle
         run: |
-          python -m pip install pyinstaller
+          python -m pip install pyinstaller==5.13.2
           python -m PyInstaller --noconfirm --clean --windowed --name MusteriTakip --icon assets/icon.ico --add-data "assets;assets" main.py
+      - name: Paketlenmis programi dene (duman testi)
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\MusteriTakip\MusteriTakip.exe -ArgumentList "--selftest","$PWD\selftest.txt" -Wait -PassThru
+          if (Test-Path selftest.txt) { Get-Content selftest.txt }
+          if ($p.ExitCode -ne 0) { throw "Duman testi basarisiz (cikis kodu $($p.ExitCode))" }
       - name: Kurulum dosyasini olustur
         run: |
-          choco install innosetup -y --no-progress
+          choco install innosetup --version=6.2.2 -y --no-progress
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\kurulum.iss
       - uses: actions/upload-artifact@v4
         with:

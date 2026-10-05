@@ -121,6 +121,11 @@ class ExportTest(unittest.TestCase):
                     self.assertEqual(f.read(5), b"%PDF-")
                 self.assertGreater(os.path.getsize(yol), 5000)  # logo + font gömülü
 
+    def test_selftest_cekirdek(self):
+        import selftest
+        with tempfile.TemporaryDirectory() as t:
+            selftest.cekirdek(t).close()
+
     def test_bos_veritabani_pdf(self):
         db = Database(":memory:")
         with tempfile.TemporaryDirectory() as t:
