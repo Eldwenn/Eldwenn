@@ -67,3 +67,36 @@ def summary(db, bugun):
             "ay_tahsilat": tahsilat,
             "geciken_tutar": sum(r["kalan"] for r in geciken),
             "geciken_musteri": len({r["musteri_id"] for r in geciken})}
+
+
+def customers_overview(db, bugun, search="", filtre="tumu"):
+    """Müşteri listesi satırları: bakiye ve durum (gecikmis / guncel / borcu_yok).
+
+    filtre: tumu | borclu | gecikmis | borcu_yok
+    """
+    satirlar = []
+    for m in db.list_customers(search):
+        b = customer_balance(db, m["id"])
+        gecikme = max((d["gecikme_gun"] for d in debt_status(db, m["id"], bugun)), default=0)
+        durum = "gecikmis" if gecikme > 0 else ("guncel" if b["bakiye"] > 0 else "borcu_yok")
+        satirlar.append({"id": m["id"], "ad": m["ad"], "telefon": m["telefon"], "eposta": m["eposta"],
+                         "gecikme_gun": gecikme, "durum": durum, **b})
+    if filtre == "borclu":
+        satirlar = [s for s in satirlar if s["bakiye"] > 0]
+    elif filtre in ("gecikmis", "borcu_yok"):
+        satirlar = [s for s in satirlar if s["durum"] == filtre]
+    return satirlar
+
+
+def upcoming_list(db, bugun, gun=7):
+    """Önümüzdeki `gun` gün içinde vadesi dolacak, kalanı olan borçlar (en yakın önce)."""
+    son = date.fromisoformat(bugun).toordinal() + gun
+    satirlar = []
+    for m in db.list_customers():
+        for d in debt_status(db, m["id"], bugun):
+            if d["kalan"] > 0 and d["vade"] and bugun <= d["vade"] \
+                    and date.fromisoformat(d["vade"]).toordinal() <= son:
+                kalan_gun = (date.fromisoformat(d["vade"]) - date.fromisoformat(bugun)).days
+                satirlar.append({**d, "musteri_ad": m["ad"], "telefon": m["telefon"], "kalan_gun": kalan_gun})
+    satirlar.sort(key=lambda r: (r["vade"], r["id"]))
+    return satirlar

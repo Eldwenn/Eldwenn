@@ -80,6 +80,16 @@ class Database:
                 (musteri_id, tutar, aciklama.strip(), tarih, vade))
         return cur.lastrowid
 
+    def get_debt(self, did):
+        return self.conn.execute("SELECT * FROM borclar WHERE id=?", (did,)).fetchone()
+
+    def update_debt(self, did, tutar, tarih, vade=None, aciklama=""):
+        if tutar <= 0:
+            raise ValueError("Borç tutarı sıfırdan büyük olmalı")
+        with self.conn:
+            self.conn.execute("UPDATE borclar SET tutar=?, tarih=?, vade=?, aciklama=? WHERE id=?",
+                              (tutar, tarih, vade, aciklama.strip(), did))
+
     def delete_debt(self, did):
         with self.conn:
             self.conn.execute("DELETE FROM borclar WHERE id=?", (did,))
@@ -98,6 +108,21 @@ class Database:
                 "INSERT INTO odemeler (musteri_id, tutar, tarih, yontem, aciklama) VALUES (?,?,?,?,?)",
                 (musteri_id, tutar, tarih, yontem.strip(), aciklama.strip()))
         return cur.lastrowid
+
+    def get_payment(self, pid):
+        return self.conn.execute("SELECT * FROM odemeler WHERE id=?", (pid,)).fetchone()
+
+    def update_payment(self, pid, tutar, tarih, yontem="", aciklama=""):
+        if tutar <= 0:
+            raise ValueError("Ödeme tutarı sıfırdan büyük olmalı")
+        with self.conn:
+            self.conn.execute("UPDATE odemeler SET tutar=?, tarih=?, yontem=?, aciklama=? WHERE id=?",
+                              (tutar, tarih, yontem.strip(), aciklama.strip(), pid))
+
+    def recent_payments(self, limit=8):
+        return self.conn.execute(
+            "SELECT o.*, m.ad AS musteri_ad FROM odemeler o JOIN musteriler m ON m.id=o.musteri_id "
+            "ORDER BY o.tarih DESC, o.id DESC LIMIT ?", (limit,)).fetchall()
 
     def delete_payment(self, pid):
         with self.conn:

@@ -77,6 +77,40 @@ class ServiceTest(unittest.TestCase):
         self.assertEqual(s["geciken_tutar"], 60000)
         self.assertEqual(s["geciken_musteri"], 1)
 
+    def test_musteri_ozeti_ve_filtre(self):
+        self.db.add_debt(self.ali, 100000, "2026-09-01", "2026-09-15")
+        self.db.add_debt(self.veli, 5000, "2026-10-01", "2026-12-01")
+        tum = {r["ad"]: r for r in services.customers_overview(self.db, "2026-10-05")}
+        self.assertEqual(tum["Ali Yılmaz"]["durum"], "gecikmis")
+        self.assertEqual(tum["Ali Yılmaz"]["gecikme_gun"], 20)
+        self.assertEqual(tum["Veli Kaya"]["durum"], "guncel")
+        self.assertEqual([r["ad"] for r in services.customers_overview(self.db, "2026-10-05", "", "gecikmis")],
+                         ["Ali Yılmaz"])
+        self.db.add_payment(self.veli, 5000, "2026-10-02")
+        self.assertEqual([r["ad"] for r in services.customers_overview(self.db, "2026-10-05", "", "borcu_yok")],
+                         ["Veli Kaya"])
+        self.assertEqual(len(services.customers_overview(self.db, "2026-10-05", "ali")), 1)
+
+    def test_yaklasan_ve_son_odemeler(self):
+        self.db.add_debt(self.ali, 10000, "2026-10-01", "2026-10-08")
+        self.db.add_debt(self.veli, 20000, "2026-10-01", "2026-11-30")
+        yak = services.upcoming_list(self.db, "2026-10-05", 7)
+        self.assertEqual([(r["musteri_ad"], r["kalan_gun"]) for r in yak], [("Ali Yılmaz", 3)])
+        self.db.add_payment(self.ali, 100, "2026-10-02")
+        self.db.add_payment(self.veli, 200, "2026-10-04")
+        son = self.db.recent_payments(1)
+        self.assertEqual(son[0]["musteri_ad"], "Veli Kaya")
+
+    def test_duzenleme(self):
+        d = self.db.add_debt(self.ali, 1000, "2026-09-01")
+        self.db.update_debt(d, 2500, "2026-09-02", "2026-10-01", "yeni")
+        self.assertEqual(self.db.get_debt(d)["tutar"], 2500)
+        p = self.db.add_payment(self.ali, 100, "2026-09-03")
+        self.db.update_payment(p, 300, "2026-09-04", "Nakit")
+        self.assertEqual(self.db.get_payment(p)["yontem"], "Nakit")
+        with self.assertRaises(ValueError):
+            self.db.update_debt(d, 0, "2026-09-02")
+
     def test_silme_cascade(self):
         self.db.add_debt(self.ali, 1000, "2026-09-01")
         self.db.add_payment(self.ali, 500, "2026-09-02")
