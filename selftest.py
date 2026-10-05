@@ -14,13 +14,18 @@ def cekirdek(klasor):
     cid = db.add_customer("Test Müşteri Çağlar Şığ", "0532", "a@b.c", "Adres")
     db.add_debt(cid, 100000, today_iso(), "2000-01-01", "Test borcu")
     db.add_payment(cid, 25000, today_iso(), "Nakit")
+    iid = db.add_usta_is("Test Usta", "Tadilat", 5000000, today_iso(), cid, "Test Müşteri", "Adres")
+    db.add_usta_odeme(iid, 2000000, today_iso(), "Nakit")
+    db.add_usta_odeme(iid, 1500000, today_iso(), "Havale")
+    assert services.usta_summary(db, today_iso())["kalan"] == 1500000
     ozet = services.summary(db, today_iso())
     assert ozet["geciken_tutar"] == 75000, ozet
     bugun = today_iso()
     pdf_export.musteri_ekstresi_pdf(db, cid, bugun, os.path.join(klasor, "e.pdf"))
     pdf_export.bakiye_raporu_pdf(db, bugun, os.path.join(klasor, "b.pdf"))
     pdf_export.geciken_raporu_pdf(db, bugun, os.path.join(klasor, "g.pdf"))
-    for ad in ("e.pdf", "b.pdf", "g.pdf"):
+    pdf_export.usta_raporu_pdf(db, bugun, os.path.join(klasor, "u.pdf"))
+    for ad in ("e.pdf", "b.pdf", "g.pdf", "u.pdf"):
         with open(os.path.join(klasor, ad), "rb") as f:
             assert f.read(5) == b"%PDF-", ad
     return db

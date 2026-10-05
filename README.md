@@ -24,6 +24,11 @@ Windows 7'de Service Pack 1 ve güncel Windows güncellemeleri (KB2999226 veya V
 ## Özellikler
 - **Müşteriler**: ekle, düzenle, sil, ara (çift tıkla detay).
 - **Borç/ödeme takibi**: detayda vade tarihli borç ve ödeme; kalan bakiye. Ödemeler en eski vadeli borçtan düşülür.
+- **Firma / Usta Ödemeleri**: usta ve firmalara yapılacak ödemeleri takip eder. Her kayıtta firma/usta, iş, müşteri
+  (müşteri seçilince adres otomatik gelir), toplam anlaşılan tutar, ödenen ve kalan tutar bulunur. Ödemeler parça parça
+  (ayrı tarih ve türle: Nakit/Havale/EFT/Diğer) girilir, "Ödeme Geçmişi"nden görülür; kalan tutar ve durum
+  (Ödenmedi / Kısmen Ödendi / Tamamen Ödendi) otomatik hesaplanır. Üstte 4 özet kutusu, firma/usta/müşteri araması,
+  durum ve tarih filtresi vardır. Kalan borçtan fazla ödeme girilemez. PDF ve CSV raporu Raporlar sekmesindedir.
 - **Geciken ödemeler**: vadesi geçenler, gecikme günüyle (kırmızı).
 - **Panel**: toplam alacak, bu ay tahsilat, geciken tutar.
 - **PDF**: müşteri ekstresi, bakiye raporu, geciken ödemeler raporu (logo + firma adı üstbilgisi).

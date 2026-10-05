@@ -126,6 +126,104 @@ class ServiceTest(unittest.TestCase):
             self.db.add_debt(self.ali, 0, "2026-01-01")
 
 
+class UstaTest(unittest.TestCase):
+    def setUp(self):
+        self.db = Database(":memory:")
+        self.m = self.db.add_customer("Ali Yılmaz", adres="Kadıköy")
+
+    def test_parca_parca_odeme(self):
+        i = self.db.add_usta_is("Usta Hasan", "Mutfak tadilatı", 5000000, "2026-10-01", self.m)
+        self.db.add_usta_odeme(i, 2000000, "2026-10-02", "Nakit")
+        self.db.add_usta_odeme(i, 1500000, "2026-10-04", "Havale", "2. taksit")
+        r = self.db.get_usta_is(i)
+        self.assertEqual((r["toplam"], r["odenen"]), (5000000, 3500000))
+        self.assertEqual(r["son_odeme"], "2026-10-04")
+        self.assertEqual(r["musteri_ad"], "Ali Yılmaz")
+        self.assertEqual([o["tutar"] for o in self.db.list_usta_odemeleri(i)], [2000000, 1500000])
+        self.assertEqual(services.usta_isler(self.db)[0]["kalan"], 1500000)
+        self.assertEqual(services.usta_isler(self.db)[0]["durum"], "kismi")
+
+    def test_fazla_odeme_engellenir(self):
+        i = self.db.add_usta_is("Usta", "İş", 10000, "2026-10-01")
+        self.db.add_usta_odeme(i, 6000, "2026-10-02")
+        with self.assertRaises(ValueError):
+            self.db.add_usta_odeme(i, 4001, "2026-10-03")
+        self.db.add_usta_odeme(i, 4000, "2026-10-03")
+        self.assertEqual(services.usta_isler(self.db)[0]["durum"], "tamam")
+
+    def test_odeme_duzenleme_ve_silme(self):
+        i = self.db.add_usta_is("Usta", "İş", 10000, "2026-10-01")
+        o1 = self.db.add_usta_odeme(i, 6000, "2026-10-02")
+        self.db.update_usta_odeme(o1, 10000, "2026-10-02", "EFT")    # kendi tutarı hariç tutulur
+        with self.assertRaises(ValueError):
+            self.db.update_usta_odeme(o1, 10001, "2026-10-02", "EFT")
+        self.db.delete_usta_odeme(o1)
+        self.assertEqual(services.usta_isler(self.db)[0]["durum"], "odenmedi")
+
+    def test_dogrulama(self):
+        with self.assertRaises(ValueError):
+            self.db.add_usta_is(" ", "İş", 100, "2026-10-01")
+        with self.assertRaises(ValueError):
+            self.db.add_usta_is("Usta", "", 100, "2026-10-01")
+        with self.assertRaises(ValueError):
+            self.db.add_usta_is("Usta", "İş", 0, "2026-10-01")
+        i = self.db.add_usta_is("Usta", "İş", 10000, "2026-10-01")
+        with self.assertRaises(ValueError):
+            self.db.add_usta_odeme(i, 100, "2026-10-02", "Çek")
+        self.db.add_usta_odeme(i, 6000, "2026-10-02")
+        with self.assertRaises(ValueError):
+            self.db.update_usta_is(i, "Usta", "İş", 5999)             # ödenenin altına inemez
+
+    def test_ozet_ve_filtreler(self):
+        a = self.db.add_usta_is("Demir Usta", "Kaba inşaat", 10000000, "2026-09-01", self.m)
+        b = self.db.add_usta_is("Boya Ltd.", "Dış cephe", 2000000, "2026-09-10", None, "Zeynep Kaya")
+        self.db.add_usta_odeme(a, 4000000, "2026-10-02")
+        self.db.add_usta_odeme(b, 2000000, "2026-09-15")
+        s = services.usta_summary(self.db, "2026-10-05")
+        self.assertEqual((s["toplam"], s["odenen"], s["kalan"], s["ay_odeme"]),
+                         (12000000, 6000000, 6000000, 4000000))
+        self.assertEqual([r["usta_ad"] for r in services.usta_isler(self.db, "demir")], ["Demir Usta"])
+        self.assertEqual([r["usta_ad"] for r in services.usta_isler(self.db, "zeynep")], ["Boya Ltd."])
+        self.assertEqual([r["usta_ad"] for r in services.usta_isler(self.db, "kaba")], ["Demir Usta"])
+        self.assertEqual([r["usta_ad"] for r in services.usta_isler(self.db, "", "tamam")], ["Boya Ltd."])
+        self.assertEqual([r["usta_ad"] for r in services.usta_isler(self.db, "", "tumu", "2026-10-01", "2026-10-31")],
+                         ["Demir Usta"])
+        self.assertEqual(self.db.usta_adlari(), ["Boya Ltd.", "Demir Usta"])
+
+    def test_tarih_araligi(self):
+        self.assertEqual(services.tarih_araligi("Tüm tarihler", "2026-10-05"), (None, None))
+        self.assertEqual(services.tarih_araligi("Bugün", "2026-10-05"), ("2026-10-05", "2026-10-05"))
+        self.assertEqual(services.tarih_araligi("Bu hafta", "2026-10-05"), ("2026-10-05", "2026-10-11"))  # pazartesi
+        self.assertEqual(services.tarih_araligi("Bu ay", "2026-10-05"), ("2026-10-01", "2026-10-31"))
+        self.assertEqual(services.tarih_araligi("Geçen ay", "2026-10-05"), ("2026-09-01", "2026-09-30"))
+        self.assertEqual(services.tarih_araligi("Geçen ay", "2026-01-15"), ("2025-12-01", "2025-12-31"))
+        self.assertEqual(services.tarih_araligi("Son 30 gün", "2026-10-05"), ("2026-09-05", "2026-10-05"))
+        self.assertEqual(services.tarih_araligi("Bu yıl", "2026-10-05"), ("2026-01-01", "2026-12-31"))
+
+    def test_musteri_silinince_kayit_kalir(self):
+        i = self.db.add_usta_is("Usta", "İş", 1000, "2026-10-01", self.m, "Ali Yılmaz")
+        self.db.delete_customer(self.m)
+        r = self.db.get_usta_is(i)
+        self.assertIsNone(r["musteri_id"])
+        self.assertEqual(r["musteri_ad"], "Ali Yılmaz")
+        self.db.delete_usta_is(i)
+        self.assertEqual(self.db.conn.execute("SELECT COUNT(*) FROM usta_odemeleri").fetchone()[0], 0)
+
+    def test_eski_veritabani_yukseltme(self):
+        with tempfile.TemporaryDirectory() as t:
+            yol = os.path.join(t, "eski.db")
+            import sqlite3
+            c = sqlite3.connect(yol)
+            c.executescript("CREATE TABLE musteriler (id INTEGER PRIMARY KEY AUTOINCREMENT, ad TEXT NOT NULL, "
+                            "telefon TEXT DEFAULT '', eposta TEXT DEFAULT '', adres TEXT DEFAULT '', notlar TEXT DEFAULT '');"
+                            "INSERT INTO musteriler (ad) VALUES ('Eski Müşteri');")
+            c.commit(); c.close()
+            db = Database(yol)
+            self.assertEqual(db.list_customers()[0]["ad"], "Eski Müşteri")
+            db.add_usta_is("Usta", "İş", 100, "2026-10-01")
+            db.close()
+
+
 class ExportTest(unittest.TestCase):
     def setUp(self):
         self.db = Database(":memory:")
@@ -154,6 +252,22 @@ class ExportTest(unittest.TestCase):
                 with open(yol, "rb") as f:
                     self.assertEqual(f.read(5), b"%PDF-")
                 self.assertGreater(os.path.getsize(yol), 5000)  # logo + font gömülü
+
+    def test_usta_cikti(self):
+        i = self.db.add_usta_is("Usta <Hasan>", "Mutfak", 5000000, "2026-10-01", self.c, "Ayşe")
+        self.db.add_usta_odeme(i, 2000000, "2026-10-02", "Nakit")
+        with tempfile.TemporaryDirectory() as t:
+            yol = os.path.join(t, "u.csv")
+            export.export_usta_csv(self.db, yol)
+            with open(yol, encoding="utf-8-sig") as f:
+                satirlar = list(csv.reader(f, delimiter=";"))
+            self.assertEqual(satirlar[1][0], "Usta <Hasan>")
+            self.assertEqual(satirlar[1][5], "30.000,00 ₺")
+            self.assertEqual(satirlar[1][7], "Kısmen Ödendi")
+            pdf = os.path.join(t, "u.pdf")
+            pdf_export.usta_raporu_pdf(self.db, "2026-10-05", pdf)
+            with open(pdf, "rb") as f:
+                self.assertEqual(f.read(5), b"%PDF-")
 
     def test_selftest_cekirdek(self):
         import selftest

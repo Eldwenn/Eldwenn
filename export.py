@@ -31,3 +31,10 @@ def export_overdue_csv(db, path, bugun):
                [[r["musteri_ad"], r["telefon"], r["aciklama"], format_date(r["vade"]),
                  format_tl(r["kalan"]), r["gecikme_gun"]]
                 for r in services.overdue_list(db, bugun)])
+
+
+def export_usta_csv(db, path):
+    _write_csv(path, ["Firma / Usta", "Müşteri", "İş / Proje", "Toplam", "Ödenen", "Kalan", "Tarih", "Durum"],
+               [[r["usta_ad"], r["musteri_ad"], r["is_adi"], format_tl(r["toplam"]), format_tl(r["odenen"]),
+                 format_tl(r["kalan"]), format_date(r["tarih"]), services.USTA_DURUM_ADI[r["durum"]]]
+                for r in services.usta_isler(db)])

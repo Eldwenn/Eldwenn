@@ -147,3 +147,20 @@ def geciken_raporu_pdf(db, bugun, yol):
             [40, 28, 42, 22, 32, 16], {4, 5}, st, ["TOPLAM", "", "", "", format_tl(toplam), ""])]
 
     _olustur(yol, "Geciken Ödemeler", bugun, icerik)
+
+
+def usta_raporu_pdf(db, bugun, yol):
+    satirlar = services.usta_isler(db)
+
+    def icerik(st):
+        toplam = sum(r["toplam"] for r in satirlar)
+        odenen = sum(r["odenen"] for r in satirlar)
+        return [_veri_tablosu(
+            ["Firma / Usta", "Müşteri", "İş / Proje", "Toplam", "Ödenen", "Kalan", "Durum"],
+            [[r["usta_ad"], r["musteri_ad"], r["is_adi"], format_tl(r["toplam"]), format_tl(r["odenen"]),
+              format_tl(r["kalan"]), services.USTA_DURUM_ADI[r["durum"]]] for r in satirlar]
+            or [["Kayıt yok", "", "", "", "", "", ""]],
+            [28, 24, 28, 24, 24, 24, 28], {3, 4, 5}, st,
+            ["TOPLAM", "", "", format_tl(toplam), format_tl(odenen), format_tl(toplam - odenen), ""])]
+
+    _olustur(yol, "Firma / Usta Ödemeleri", bugun, icerik)

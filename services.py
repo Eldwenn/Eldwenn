@@ -100,3 +100,69 @@ def upcoming_list(db, bugun, gun=7):
                 satirlar.append({**d, "musteri_ad": m["ad"], "telefon": m["telefon"], "kalan_gun": kalan_gun})
     satirlar.sort(key=lambda r: (r["vade"], r["id"]))
     return satirlar
+
+
+# --- Firma / Usta ödemeleri ---
+USTA_DURUM_ADI = {"odenmedi": "Ödenmedi", "kismi": "Kısmen Ödendi", "tamam": "Tamamen Ödendi"}
+
+
+def usta_durum(toplam, odenen):
+    """odenmedi | kismi | tamam"""
+    if odenen <= 0:
+        return "odenmedi"
+    return "tamam" if odenen >= toplam else "kismi"
+
+
+def usta_isler(db, arama="", durum="tumu", baslangic=None, bitis=None):
+    """Firma/usta kayıtları (en yeni önce). Tarih = son ödeme tarihi, yoksa kayıt tarihi.
+
+    arama: firma/usta, müşteri veya iş adında geçen metin. durum: tumu|odenmedi|kismi|tamam.
+    baslangic/bitis: ISO tarih (dahil), None ise sınırsız.
+    """
+    aranan = arama.strip().casefold()
+    satirlar = []
+    for r in db.list_usta_isler():
+        tarih = r["son_odeme"] or r["kayit_tarihi"]
+        d = usta_durum(r["toplam"], r["odenen"])
+        if aranan and not any(aranan in (r[k] or "").casefold() for k in ("usta_ad", "musteri_ad", "is_adi")):
+            continue
+        if durum != "tumu" and d != durum:
+            continue
+        if baslangic and tarih < baslangic:
+            continue
+        if bitis and tarih > bitis:
+            continue
+        satirlar.append({**dict(r), "kalan": r["toplam"] - r["odenen"], "durum": d, "tarih": tarih})
+    return satirlar
+
+
+def usta_summary(db, bugun):
+    """Özet kutuları: toplam borç, toplam ödenen, kalan borç, bu ay yapılan ödeme (tüm kayıtlar üzerinden)."""
+    isler = db.list_usta_isler()
+    toplam = sum(r["toplam"] for r in isler)
+    odenen = sum(r["odenen"] for r in isler)
+    ay = db.conn.execute(
+        "SELECT COALESCE(SUM(tutar),0) FROM usta_odemeleri WHERE substr(tarih,1,7)=?", (bugun[:7],)).fetchone()[0]
+    return {"kayit": len(isler), "toplam": toplam, "odenen": odenen, "kalan": toplam - odenen,
+            "ay_odeme": ay, "acik_kayit": sum(1 for r in isler if r["toplam"] > r["odenen"])}
+
+
+def tarih_araligi(ad, bugun):
+    """Filtre adından (baslangic, bitis) ISO tarih çifti. bugun: ISO tarih. 'Tüm tarihler' -> (None, None)."""
+    from datetime import timedelta
+    b = date.fromisoformat(bugun)
+    if ad == "Bugün":
+        return bugun, bugun
+    if ad == "Bu hafta":
+        pazartesi = b - timedelta(days=b.weekday())
+        return pazartesi.isoformat(), (pazartesi + timedelta(days=6)).isoformat()
+    if ad == "Bu ay":
+        return b.replace(day=1).isoformat(), bugun[:7] + "-31"
+    if ad == "Geçen ay":
+        onceki_son = b.replace(day=1) - timedelta(days=1)
+        return onceki_son.replace(day=1).isoformat(), onceki_son.isoformat()
+    if ad == "Son 30 gün":
+        return (b - timedelta(days=30)).isoformat(), bugun
+    if ad == "Bu yıl":
+        return f"{b.year}-01-01", f"{b.year}-12-31"
+    return None, None
