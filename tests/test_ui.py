@@ -29,6 +29,7 @@ class UstaArayuzTest(unittest.TestCase):
         self.sayfa = self.app.sayfalar["usta"]
 
     def tearDown(self):
+        self.app.update()
         self.app.destroy()
 
     def form_uygula(self, degerler, cagri, kaydet=True):
@@ -180,19 +181,20 @@ class UstaArayuzTest(unittest.TestCase):
         self.assertEqual(cagri, [("gecmis", int(iid))])
 
     def test_kirpilan_hucre_ipucu(self):
+        from types import SimpleNamespace
         self.yeni_kayit(usta_ad="Çok Uzun İsimli Firma ve Ustalık Hizmetleri Ltd. Şti.")
         self.app.update()
         iid = str(self.db.list_usta_isler()[0]["id"])
         x, y, w, h = self.sayfa.tree.bbox(iid, "usta")
-        self.sayfa.tree.event_generate("<Motion>", x=x + 8, y=y + h // 2)
+        balonlar = lambda: [w for w in self.sayfa.tree.winfo_children() if isinstance(w, tk.Toplevel)]
+        # fare olayını doğrudan işleyiciye veriyoruz (sentetik olay Windows'ta güvenilir değil)
+        self.sayfa.hucre_ipucu._hareket(SimpleNamespace(x=x + 8, y=y + h // 2, x_root=100, y_root=100))
         self.app.after(900, self.app.quit)
         self.app.mainloop()                      # balon 500 ms sonra çıkar
-        gosterge = [w for w in self.sayfa.tree.winfo_children() if isinstance(w, tk.Toplevel)]
-        self.assertEqual(len(gosterge), 1)
-        self.assertIn("Çok Uzun İsimli", gosterge[0].winfo_children()[0].cget("text"))
-        self.sayfa.tree.event_generate("<Leave>")
-        self.app.update()
-        self.assertFalse([w for w in self.sayfa.tree.winfo_children() if isinstance(w, tk.Toplevel)])
+        self.assertEqual(len(balonlar()), 1)
+        self.assertIn("Çok Uzun İsimli", balonlar()[0].winfo_children()[0].cget("text"))
+        self.sayfa.hucre_ipucu._gizle()
+        self.assertEqual(balonlar(), [])
 
     def test_detay_penceresi_ve_gecmis(self):
         self.yeni_kayit()

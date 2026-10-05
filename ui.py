@@ -670,7 +670,7 @@ class UstaSayfa(SayfaTaslagi):
         self.tree.bind("<Double-1>", self._cift_tik)
         self.tree.bind("<ButtonRelease-1>", self._tik)
         self.tree.bind("<Motion>", self._hareket, add="+")
-        HucreIpucu(self.tree, ("usta", "musteri", "is"))
+        self.hucre_ipucu = HucreIpucu(self.tree, ("usta", "musteri", "is"))
         self.tree.bind("<Return>", lambda e: self.gecmis())
         self.tree.bind("<Delete>", lambda e: self.sil())
         self.menu = tk.Menu(self.tree, tearoff=0)
