@@ -1,12 +1,28 @@
 """tkinter arayüzü."""
 import os
+import subprocess
+import sys
 import tkinter as tk
-import webbrowser
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 import export
+import pdf_export
 import services
+from config import FIRMA_ADI, resource_path
 from format import format_date, format_tl, parse_date, parse_tl, today_iso
+
+
+def pdf_ac(yol):
+    """Oluşturulan PDF'i varsayılan okuyucuda açar."""
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(yol)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", yol])
+        else:
+            subprocess.Popen(["xdg-open", yol])
+    except OSError:
+        pass
 
 
 class FormDialog(simpledialog.Dialog):
@@ -49,8 +65,19 @@ class App(tk.Tk):
     def __init__(self, db):
         super().__init__()
         self.db = db
-        self.title("Müşteri Takip ve Ödeme Takibi")
+        self.title(f"{FIRMA_ADI} - Müşteri Takip ve Ödeme Takibi")
         self.geometry("1000x620")
+        try:
+            self.logo = tk.PhotoImage(file=resource_path("assets/logo.png"))
+            self.iconphoto(True, self.logo)
+            self.logo_kucuk = self.logo.subsample(max(1, self.logo.width() // 48))
+        except tk.TclError:
+            self.logo_kucuk = None
+        baslik = ttk.Frame(self)
+        baslik.pack(fill="x", padx=10, pady=(8, 0))
+        if self.logo_kucuk:
+            ttk.Label(baslik, image=self.logo_kucuk).pack(side="left", padx=(0, 10))
+        ttk.Label(baslik, text=FIRMA_ADI, font=("", 18, "bold"), foreground="#E31E24").pack(side="left")
         self.nb = ttk.Notebook(self)
         self.nb.pack(fill="both", expand=True, padx=6, pady=6)
         self.panel = ttk.Frame(self.nb)
@@ -183,20 +210,37 @@ class App(tk.Tk):
 
     # ---------------- Raporlar ----------------
     def _rapor_kur(self):
-        for ad, komut in (("Müşterileri CSV olarak aktar", self.csv_musteriler),
-                          ("Bakiyeleri CSV olarak aktar", self.csv_bakiyeler),
-                          ("Geciken listesini CSV olarak aktar", self.csv_geciken),
-                          ("Seçili müşteri ekstresi (HTML, yazdırılabilir)", self.ekstre)):
-            ttk.Button(self.rapor, text=ad, command=komut, width=50).pack(padx=20, pady=10, anchor="w")
+        ttk.Label(self.rapor, text="PDF raporlar (firma logolu)", font=("", 11, "bold")).pack(
+            padx=20, pady=(14, 4), anchor="w")
+        for ad, komut in (("Bakiye raporu (PDF)", self.pdf_bakiyeler),
+                          ("Geciken ödemeler raporu (PDF)", self.pdf_geciken),
+                          ("Seçili müşteri ekstresi (PDF)", self.pdf_ekstre)):
+            ttk.Button(self.rapor, text=ad, command=komut, width=40).pack(padx=20, pady=5, anchor="w")
         ttk.Label(self.rapor, text="Ekstre için önce 'Müşteriler' sekmesinde bir müşteri seçin.").pack(
             padx=20, anchor="w")
+        ttk.Label(self.rapor, text="Excel için CSV dışa aktarma", font=("", 11, "bold")).pack(
+            padx=20, pady=(18, 4), anchor="w")
+        for ad, komut in (("Müşterileri CSV olarak aktar", self.csv_musteriler),
+                          ("Bakiyeleri CSV olarak aktar", self.csv_bakiyeler),
+                          ("Geciken listesini CSV olarak aktar", self.csv_geciken)):
+            ttk.Button(self.rapor, text=ad, command=komut, width=40).pack(padx=20, pady=5, anchor="w")
+
+    def _kaydet(self, uzanti, ad, fonksiyon, aciklama):
+        yol = filedialog.asksaveasfilename(parent=self, defaultextension=uzanti, initialfile=ad,
+                                           filetypes=[(aciklama, "*" + uzanti)])
+        if not yol:
+            return
+        try:
+            fonksiyon(yol)
+        except OSError as e:
+            return self._hata(f"Dosya kaydedilemedi (başka programda açık olabilir):\n{e}")
+        if uzanti == ".pdf":
+            pdf_ac(yol)
+        else:
+            messagebox.showinfo("Tamam", f"Kaydedildi:\n{yol}", parent=self)
 
     def _csv(self, ad, fonksiyon):
-        yol = filedialog.asksaveasfilename(parent=self, defaultextension=".csv", initialfile=ad,
-                                           filetypes=[("CSV", "*.csv")])
-        if yol:
-            fonksiyon(yol)
-            messagebox.showinfo("Tamam", f"Kaydedildi:\n{yol}", parent=self)
+        self._kaydet(".csv", ad, fonksiyon, "CSV")
 
     def csv_musteriler(self):
         self._csv("musteriler.csv", lambda y: export.export_customers_csv(self.db, y))
@@ -207,18 +251,24 @@ class App(tk.Tk):
     def csv_geciken(self):
         self._csv("geciken.csv", lambda y: export.export_overdue_csv(self.db, y, today_iso()))
 
-    def ekstre(self):
-        sec = self.musteri_tree.selection()
-        if not sec:
-            messagebox.showinfo("Bilgi", "Önce 'Müşteriler' sekmesinde bir müşteri seçin.", parent=self)
-            return
-        cid = int(sec[0])
-        yol = filedialog.asksaveasfilename(parent=self, defaultextension=".html", initialfile="ekstre.html",
-                                           filetypes=[("HTML", "*.html")])
-        if yol:
-            with open(yol, "w", encoding="utf-8") as f:
-                f.write(export.statement_html(self.db, cid, today_iso()))
-            webbrowser.open("file://" + os.path.abspath(yol))
+    def pdf_bakiyeler(self):
+        self._kaydet(".pdf", "bakiye_raporu.pdf", lambda y: pdf_export.bakiye_raporu_pdf(
+            self.db, today_iso(), y), "PDF")
+
+    def pdf_geciken(self):
+        self._kaydet(".pdf", "geciken_odemeler.pdf", lambda y: pdf_export.geciken_raporu_pdf(
+            self.db, today_iso(), y), "PDF")
+
+    def pdf_ekstre(self, cid=None):
+        if cid is None:
+            sec = self.musteri_tree.selection()
+            if not sec:
+                messagebox.showinfo("Bilgi", "Önce 'Müşteriler' sekmesinde bir müşteri seçin.", parent=self)
+                return
+            cid = int(sec[0])
+        ad = self.db.get_customer(cid)["ad"].replace(" ", "_")
+        self._kaydet(".pdf", f"ekstre_{ad}.pdf", lambda y: pdf_export.musteri_ekstresi_pdf(
+            self.db, cid, today_iso(), y), "PDF")
 
 
 class DetayPenceresi(tk.Toplevel):
@@ -239,6 +289,8 @@ class DetayPenceresi(tk.Toplevel):
         b1.pack(fill="x", padx=10, pady=4)
         ttk.Button(b1, text="Borç Ekle", command=self.borc_ekle).pack(side="left", padx=3)
         ttk.Button(b1, text="Seçili Borcu Sil", command=self.borc_sil).pack(side="left", padx=3)
+        ttk.Button(b1, text="PDF Ekstre Al", command=lambda: self.app.pdf_ekstre(self.cid)).pack(
+            side="right", padx=3)
 
         ttk.Label(self, text="Ödemeler").pack(anchor="w", padx=10)
         f2, self.odeme_tree = tablo(self, [

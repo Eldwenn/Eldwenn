@@ -1,0 +1,32 @@
+name: Windows kurulum dosyasi
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths-ignore: ["**/*.md"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Testler
+        run: |
+          python -m pip install -r requirements.txt
+          python -m unittest discover tests
+      - name: Programi paketle
+        run: |
+          python -m pip install pyinstaller
+          python -m PyInstaller --noconfirm --clean --windowed --name MusteriTakip --icon assets/icon.ico --add-data "assets;assets" main.py
+      - name: Kurulum dosyasini olustur
+        run: |
+          choco install innosetup -y --no-progress
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" installer\kurulum.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: YildizYapi_MusteriTakip_Kurulum
+          path: installer/Output/YildizYapi_MusteriTakip_Kurulum.exe

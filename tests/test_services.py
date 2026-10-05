@@ -7,6 +7,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import export
+import pdf_export
 import services
 from db import Database
 from format import format_date, format_tl, parse_date, parse_tl
@@ -92,23 +93,39 @@ class ServiceTest(unittest.TestCase):
 
 
 class ExportTest(unittest.TestCase):
-    def test_csv_ve_ekstre(self):
-        db = Database(":memory:")
-        c = db.add_customer("Ayşe <Öz>", "0532")
-        db.add_debt(c, 100000, "2026-09-01", "2026-09-15", "Mal bedeli")
-        db.add_payment(c, 25000, "2026-09-20", "havale")
+    def setUp(self):
+        self.db = Database(":memory:")
+        self.c = self.db.add_customer("Ayşe <Öz>", "0532")
+        self.db.add_debt(self.c, 100000, "2026-09-01", "2026-09-15", "Mal bedeli")
+        self.db.add_payment(self.c, 25000, "2026-09-20", "havale")
+
+    def test_csv(self):
         with tempfile.TemporaryDirectory() as t:
             yol = os.path.join(t, "geciken.csv")
-            export.export_overdue_csv(db, yol, "2026-10-05")
+            export.export_overdue_csv(self.db, yol, "2026-10-05")
             with open(yol, encoding="utf-8-sig") as f:
                 satirlar = list(csv.reader(f, delimiter=";"))
             self.assertEqual(satirlar[1][0], "Ayşe <Öz>")
             self.assertEqual(satirlar[1][4], "750,00 ₺")
-            export.export_balances_csv(db, os.path.join(t, "b.csv"))
-            export.export_customers_csv(db, os.path.join(t, "m.csv"))
-        html = export.statement_html(db, c, "2026-10-05")
-        self.assertIn("Ayşe &lt;Öz&gt;", html)
-        self.assertIn("750,00 ₺", html)
+            export.export_balances_csv(self.db, os.path.join(t, "b.csv"))
+            export.export_customers_csv(self.db, os.path.join(t, "m.csv"))
+
+    def test_pdf(self):
+        with tempfile.TemporaryDirectory() as t:
+            for ad, fn in (("e.pdf", lambda y: pdf_export.musteri_ekstresi_pdf(self.db, self.c, "2026-10-05", y)),
+                           ("b.pdf", lambda y: pdf_export.bakiye_raporu_pdf(self.db, "2026-10-05", y)),
+                           ("g.pdf", lambda y: pdf_export.geciken_raporu_pdf(self.db, "2026-10-05", y))):
+                yol = os.path.join(t, ad)
+                fn(yol)
+                with open(yol, "rb") as f:
+                    self.assertEqual(f.read(5), b"%PDF-")
+                self.assertGreater(os.path.getsize(yol), 5000)  # logo + font gömülü
+
+    def test_bos_veritabani_pdf(self):
+        db = Database(":memory:")
+        with tempfile.TemporaryDirectory() as t:
+            pdf_export.bakiye_raporu_pdf(db, "2026-10-05", os.path.join(t, "b.pdf"))
+            pdf_export.geciken_raporu_pdf(db, "2026-10-05", os.path.join(t, "g.pdf"))
 
 
 if __name__ == "__main__":

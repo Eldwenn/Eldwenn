@@ -1,18 +1,27 @@
-# Müşteri Takip ve Ödeme Takibi
+# Yıldız Yapı Mimarlık - Müşteri Takip ve Ödeme Takibi
 
-Türkçe arayüzlü, TL kullanan masaüstü program (Python, tkinter, SQLite). Ek paket gerekmez.
+Türkçe arayüzlü, TL kullanan masaüstü program (Python, tkinter, SQLite). Raporlar firma logolu PDF olarak alınır.
 
-## Kurulum ve çalıştırma
-- Python 3.8+ gerekir. Linux'ta tkinter için: `sudo apt install python3-tk`
-- Çalıştırma: `python main.py` (veriler aynı klasörde `musteri_takip.db` dosyasına kaydedilir)
+## Kurulum dosyası (setup.exe)
+**Seçenek 1 - GitHub'dan hazır indir:** Depoda *Actions → Windows kurulum dosyasi* çalışmasının sonunda
+`YildizYapi_MusteriTakip_Kurulum` paketi (içinde `.exe`) oluşur; indirip çift tıklayın. Python kurmaya gerek yoktur.
+
+**Seçenek 2 - Windows'ta kendiniz üretin:** Python 3.8+ ve [Inno Setup 6](https://jrsoftware.org/isdl.php)
+kurun, sonra `build_windows.bat` çalıştırın. Çıktı: `installer\Output\YildizYapi_MusteriTakip_Kurulum.exe`
+
+Veriler kurulum klasörüne değil `%APPDATA%\Yildiz Yapi Mimarlik\Musteri Takip\musteri_takip.db` dosyasına
+kaydedilir; program güncellenince veya kaldırılınca silinmez. Yedek için bu dosyayı kopyalayın.
+
+## Kurulumsuz çalıştırma
+`pip install -r requirements.txt` ve `python main.py` (Linux'ta `sudo apt install python3-tk`)
 
 ## Özellikler
 - **Müşteriler**: ekle, düzenle, sil, ara (çift tıkla detay).
-- **Borç/ödeme takibi**: müşteri detayında borç (vade tarihli) ve ödeme ekleme, kalan bakiye.
-  Ödemeler en eski vadeli borçtan başlayarak uygulanır.
-- **Geciken ödemeler**: vadesi geçen borçlar, gecikme günü ile (kırmızı).
+- **Borç/ödeme takibi**: detayda vade tarihli borç ve ödeme; kalan bakiye. Ödemeler en eski vadeli borçtan düşülür.
+- **Geciken ödemeler**: vadesi geçenler, gecikme günüyle (kırmızı).
 - **Panel**: toplam alacak, bu ay tahsilat, geciken tutar.
-- **Raporlar**: CSV dışa aktarma (Excel uyumlu) ve yazdırılabilir müşteri ekstresi (HTML).
+- **PDF**: müşteri ekstresi, bakiye raporu, geciken ödemeler raporu (logo + firma adı üstbilgisi).
+- **CSV**: müşteri, bakiye, geciken listesi (Excel uyumlu).
 
 ## Testler
 `python -m unittest discover tests`
